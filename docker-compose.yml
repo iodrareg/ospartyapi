@@ -1,13 +1,3 @@
-# The advertising API (built from ./Dockerfile) + Redis.
-#
-#   ./gradlew bootJar          # produce build/libs/app.jar first
-#   docker compose up --build  # build the image and start the stack
-#
-# API on http://localhost:8080; ads persist in the redis-data volume.
-#
-# TLS / reverse proxy is handled by a separate Nginx Proxy Manager stack: point
-# its Proxy Host at this host's published port (e.g. forward to 127.0.0.1:8080,
-# or host.docker.internal:8080 from inside the NPM container).
 services:
   redis:
     image: redis:7-alpine
@@ -32,7 +22,6 @@ services:
       APP_STORAGE: redis
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
-    # Published on the host so the external Nginx Proxy Manager can route to it.
     ports:
       - "8080:8080"
     restart: unless-stopped
