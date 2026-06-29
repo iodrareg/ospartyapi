@@ -16,10 +16,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test") // use the in-memory FakePartyRepository, not a real Redis
+@ActiveProfiles("test")
 @TestPropertySource(properties = "app.rate-limit.interval-ms=5000")
-class RateLimitTest
-{
+class RateLimitTest {
 	private static final String BODY =
 		"{\"activity\":\"cox\",\"host\":\"Spammer\",\"capacity\":2,\"passphrase\":\"p\"}";
 
@@ -27,8 +26,7 @@ class RateLimitTest
 	private MockMvc mvc;
 
 	@Test
-	void secondRapidPostIsRateLimited() throws Exception
-	{
+	void secondRapidPostIsRateLimited() throws Exception {
 		mvc.perform(post("/api/v1/parties").contentType(MediaType.APPLICATION_JSON).content(BODY))
 			.andExpect(status().isCreated());
 
@@ -38,8 +36,7 @@ class RateLimitTest
 	}
 
 	@Test
-	void getsAreNotRateLimited() throws Exception
-	{
+	void getsAreNotRateLimited() throws Exception {
 		mvc.perform(get("/api/v1/parties")).andExpect(status().isOk());
 		mvc.perform(get("/api/v1/parties")).andExpect(status().isOk());
 		mvc.perform(get("/api/v1/parties")).andExpect(status().isOk());

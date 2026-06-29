@@ -23,19 +23,13 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-/**
- * End-to-end check of the live party-list socket: subscribe -> snapshot, then a
- * REST create surfaces as a {@code created} delta within a reconcile tick. Runs a
- * real servlet container (MockMvc can't speak WebSocket) with a fast reconcile.
- */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test") // use the in-memory FakePartyRepository, not a real Redis
+@ActiveProfiles("test")
 @TestPropertySource(properties = {
 	"app.rate-limit.interval-ms=0",
 	"app.ws.reconcile-interval-ms=150"
 })
-class PartyWebSocketTest
-{
+class PartyWebSocketTest {
 	@LocalServerPort
 	private int port;
 
@@ -46,12 +40,10 @@ class PartyWebSocketTest
 	private ObjectMapper mapper;
 
 	@Test
-	void snapshotOnSubscribeThenCreatedDelta() throws Exception
-	{
+	void snapshotOnSubscribeThenCreatedDelta() throws Exception {
 		BlockingQueue<JsonNode> messages = new LinkedBlockingQueue<>();
 		WebSocketSession session = connect(messages);
-		try
-		{
+		try {
 			session.sendMessage(new TextMessage("{\"type\":\"subscribe\"}"));
 
 			JsonNode snapshot = awaitWhere(messages, m -> "snapshot".equals(type(m)), "snapshot");
@@ -68,26 +60,22 @@ class PartyWebSocketTest
 				"created for WsTester");
 			assertThat(created.get("party").get("activity").asText()).isEqualTo("cox");
 		}
-		finally
-		{
+		finally {
 			session.close();
 		}
 	}
 
 	@Test
-	void hostOverSocketAcksAndBroadcasts() throws Exception
-	{
+	void hostOverSocketAcksAndBroadcasts() throws Exception {
 		BlockingQueue<JsonNode> messages = new LinkedBlockingQueue<>();
 		WebSocketSession session = connect(messages);
-		try
-		{
+		try {
 			session.sendMessage(new TextMessage("{\"type\":\"subscribe\"}"));
 			awaitWhere(messages, m -> "snapshot".equals(type(m)), "snapshot");
 
 			session.sendMessage(new TextMessage("{\"type\":\"host\",\"key\":\"k-host\",\"request\":"
 				+ "{\"activity\":\"tob\",\"host\":\"WsHost\",\"capacity\":3,\"passphrase\":\"pp-host\"}}"));
 
-			// Directed ack carries the server-assigned id, and searchers see a created delta.
 			JsonNode hosted = awaitWhere(messages, m -> "hosted".equals(type(m)), "hosted ack");
 			assertThat(hosted.path("party").path("host").asText()).isEqualTo("WsHost");
 			assertThat(hosted.path("party").path("id").asText()).isNotBlank();
@@ -97,19 +85,16 @@ class PartyWebSocketTest
 				m -> "created".equals(type(m)) && "WsHost".equals(m.path("party").path("host").asText()),
 				"created for WsHost");
 		}
-		finally
-		{
+		finally {
 			session.close();
 		}
 	}
 
 	@Test
-	void updateOverSocketChangesField() throws Exception
-	{
+	void updateOverSocketChangesField() throws Exception {
 		BlockingQueue<JsonNode> messages = new LinkedBlockingQueue<>();
 		WebSocketSession session = connect(messages);
-		try
-		{
+		try {
 			session.sendMessage(new TextMessage("{\"type\":\"subscribe\"}"));
 			awaitWhere(messages, m -> "snapshot".equals(type(m)), "snapshot");
 
@@ -119,8 +104,6 @@ class PartyWebSocketTest
 			JsonNode hosted = awaitWhere(messages, m -> "hosted".equals(type(m)), "hosted ack");
 			String id = hosted.path("party").path("id").asText();
 
-			// Let the reconciler observe the created ad first, so the later change is seen
-			// as an update rather than collapsing into the initial created frame.
 			awaitWhere(messages, m -> "created".equals(type(m)) && id.equals(m.path("party").path("id").asText()),
 				"created for the hosted ad");
 
@@ -133,40 +116,32 @@ class PartyWebSocketTest
 				"updated with new description");
 			assertThat(updated.path("party").path("description").asText()).isEqualTo("changed!");
 		}
-		finally
-		{
+		finally {
 			session.close();
 		}
 	}
 
-	private WebSocketSession connect(BlockingQueue<JsonNode> messages) throws Exception
-	{
+	private WebSocketSession connect(BlockingQueue<JsonNode> messages) throws Exception {
 		return new StandardWebSocketClient().execute(
-			new TextWebSocketHandler()
-			{
+			new TextWebSocketHandler() {
 				@Override
-				protected void handleTextMessage(WebSocketSession s, TextMessage m) throws Exception
-				{
+				protected void handleTextMessage(WebSocketSession s, TextMessage m) throws Exception {
 					messages.add(mapper.readTree(m.getPayload()));
 				}
 			},
 			"ws://localhost:" + port + "/api/v1/ws/parties").get(5, TimeUnit.SECONDS);
 	}
 
-	private static String type(JsonNode msg)
-	{
+	private static String type(JsonNode msg) {
 		return msg.path("type").asText();
 	}
 
 	private JsonNode awaitWhere(BlockingQueue<JsonNode> messages, Predicate<JsonNode> match, String desc)
-		throws InterruptedException
-	{
+		throws InterruptedException {
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-		while (System.nanoTime() < deadline)
-		{
+		while (System.nanoTime() < deadline) {
 			JsonNode msg = messages.poll(5, TimeUnit.SECONDS);
-			if (msg != null && match.test(msg))
-			{
+			if (msg != null && match.test(msg)) {
 				return msg;
 			}
 		}

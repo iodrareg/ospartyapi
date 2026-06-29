@@ -9,20 +9,15 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Shared helpers for building a {@link Party} from a request and matching hosts. */
-final class PartyFactory
-{
-	// Unambiguous alphabet (no 0/O/1/I) for human-friendly invite codes.
+final class PartyFactory {
 	private static final char[] CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
 	private static final int CODE_LENGTH = 6;
 	private static final SecureRandom RANDOM = new SecureRandom();
 
-	private PartyFactory()
-	{
+	private PartyFactory() {
 	}
 
-	static Party fromRequest(PartyRequest request, String id, String inviteCode, long now)
-	{
+	static Party fromRequest(PartyRequest request, String id, String inviteCode, long now) {
 		Party party = new Party();
 		party.setId(id);
 		party.setActivity(request.activity());
@@ -44,193 +39,139 @@ final class PartyFactory
 		party.setRequiredRoles(request.requiredRoles());
 		party.setHostRole(request.hostRole());
 		party.setNeededRoles(initialNeededRoles(request.requiredRoles(), request.hostRole()));
-		// Advisory only — the host occupies the first slot until the live room takes over.
 		party.setSize(1);
 		List<String> members = new ArrayList<>();
-		if (request.host() != null)
-		{
+		if (request.host() != null) {
 			members.add(request.host());
 		}
 		party.setMembers(members);
 		return party;
 	}
 
-	/**
-	 * The roles still open right after creation: the full required composition with
-	 * the host's own role removed once (the host fills it). Null/empty in, null out.
-	 */
-	private static List<String> initialNeededRoles(List<String> requiredRoles, String hostRole)
-	{
-		if (requiredRoles == null || requiredRoles.isEmpty())
-		{
+	private static List<String> initialNeededRoles(List<String> requiredRoles, String hostRole) {
+		if (requiredRoles == null || requiredRoles.isEmpty()) {
 			return requiredRoles;
 		}
 		List<String> needed = new ArrayList<>(requiredRoles);
-		if (hostRole != null)
-		{
+		if (hostRole != null) {
 			needed.remove(hostRole);
 		}
 		return needed;
 	}
 
-	/**
-	 * Parse a comma-separated list of role ids (as sent on the heartbeat) into a
-	 * list. Null/blank in -> null out (treated as "no update" by callers).
-	 */
-	static List<String> parseRoles(String csv)
-	{
-		if (csv == null || csv.isBlank())
-		{
+	static List<String> parseRoles(String csv) {
+		if (csv == null || csv.isBlank()) {
 			return null;
 		}
 		List<String> roles = new ArrayList<>();
-		for (String part : csv.split(","))
-		{
+		for (String part : csv.split(",")) {
 			String role = part.trim();
-			if (!role.isEmpty())
-			{
+			if (!role.isEmpty()) {
 				roles.add(role);
 			}
 		}
 		return roles;
 	}
 
-	/**
-	 * Apply a partial update's non-null fields to a party in place (identity fields
-	 * excepted). Mirrors the guards the old heartbeat used for size/world/layout/roles.
-	 * @return true if any field actually changed (lets the redis store skip a rewrite).
-	 */
-	static boolean applyUpdate(Party party, PartyUpdate patch)
-	{
-		if (patch == null)
-		{
+	static boolean applyUpdate(Party party, PartyUpdate patch) {
+		if (patch == null) {
 			return false;
 		}
 		boolean changed = false;
-		if (patch.getSize() != null && patch.getSize() > 0 && patch.getSize() != party.getSize())
-		{
+		if (patch.getSize() != null && patch.getSize() > 0 && patch.getSize() != party.getSize()) {
 			party.setSize(patch.getSize());
 			changed = true;
 		}
-		if (patch.getWorld() != null && !patch.getWorld().isBlank() && !patch.getWorld().equals(party.getWorld()))
-		{
+		if (patch.getWorld() != null && !patch.getWorld().isBlank() && !patch.getWorld().equals(party.getWorld())) {
 			party.setWorld(patch.getWorld());
 			changed = true;
 		}
-		if (patch.getLayout() != null && !patch.getLayout().isBlank() && !patch.getLayout().equals(party.getLayout()))
-		{
+		if (patch.getLayout() != null && !patch.getLayout().isBlank() && !patch.getLayout().equals(party.getLayout())) {
 			party.setLayout(patch.getLayout());
 			changed = true;
 		}
-		if (patch.getNeededRoles() != null && !patch.getNeededRoles().equals(party.getNeededRoles()))
-		{
+		if (patch.getNeededRoles() != null && !patch.getNeededRoles().equals(party.getNeededRoles())) {
 			party.setNeededRoles(patch.getNeededRoles());
 			changed = true;
 		}
-		if (patch.getDescription() != null && !patch.getDescription().equals(party.getDescription()))
-		{
+		if (patch.getDescription() != null && !patch.getDescription().equals(party.getDescription())) {
 			party.setDescription(patch.getDescription());
 			changed = true;
 		}
-		if (patch.getCapacity() != null && patch.getCapacity() > 0 && patch.getCapacity() != party.getCapacity())
-		{
+		if (patch.getCapacity() != null && patch.getCapacity() > 0 && patch.getCapacity() != party.getCapacity()) {
 			party.setCapacity(patch.getCapacity());
 			changed = true;
 		}
-		if (patch.getLootRule() != null)
-		{
+		if (patch.getLootRule() != null) {
 			String lootRule = normalizeLootRule(patch.getLootRule());
-			if (!lootRule.equals(party.getLootRule()))
-			{
+			if (!lootRule.equals(party.getLootRule())) {
 				party.setLootRule(lootRule);
 				changed = true;
 			}
 		}
-		if (patch.getIronmanOnly() != null && patch.getIronmanOnly() != party.isIronmanOnly())
-		{
+		if (patch.getIronmanOnly() != null && patch.getIronmanOnly() != party.isIronmanOnly()) {
 			party.setIronmanOnly(patch.getIronmanOnly());
 			changed = true;
 		}
-		if (patch.getPrivateParty() != null && patch.getPrivateParty() != party.isPrivateParty())
-		{
+		if (patch.getPrivateParty() != null && patch.getPrivateParty() != party.isPrivateParty()) {
 			party.setPrivateParty(patch.getPrivateParty());
 			changed = true;
 		}
-		if (patch.getMinKillCount() != null && patch.getMinKillCount() != party.getMinKillCount())
-		{
+		if (patch.getMinKillCount() != null && patch.getMinKillCount() != party.getMinKillCount()) {
 			party.setMinKillCount(patch.getMinKillCount());
 			changed = true;
 		}
 		if (patch.getMinHardModeKillCount() != null
-			&& patch.getMinHardModeKillCount() != party.getMinHardModeKillCount())
-		{
+			&& patch.getMinHardModeKillCount() != party.getMinHardModeKillCount()) {
 			party.setMinHardModeKillCount(patch.getMinHardModeKillCount());
 			changed = true;
 		}
-		if (patch.getInvocation() != null && patch.getInvocation() != party.getInvocation())
-		{
+		if (patch.getInvocation() != null && patch.getInvocation() != party.getInvocation()) {
 			party.setInvocation(patch.getInvocation());
 			changed = true;
 		}
-		if (patch.getHardMode() != null && patch.getHardMode() != party.isHardMode())
-		{
+		if (patch.getHardMode() != null && patch.getHardMode() != party.isHardMode()) {
 			party.setHardMode(patch.getHardMode());
 			changed = true;
 		}
 		return changed;
 	}
 
-	static String newInviteCode()
-	{
+	static String newInviteCode() {
 		StringBuilder sb = new StringBuilder(CODE_LENGTH);
-		for (int i = 0; i < CODE_LENGTH; i++)
-		{
+		for (int i = 0; i < CODE_LENGTH; i++) {
 			sb.append(CODE_ALPHABET[RANDOM.nextInt(CODE_ALPHABET.length)]);
 		}
 		return sb.toString();
 	}
 
-	static String normalizeInviteCode(String code)
-	{
+	static String normalizeInviteCode(String code) {
 		return code == null ? null : code.trim().toUpperCase();
 	}
 
-	private static String normalizeLootRule(String lootRule)
-	{
-		if (lootRule == null || lootRule.isBlank())
-		{
+	private static String normalizeLootRule(String lootRule) {
+		if (lootRule == null || lootRule.isBlank()) {
 			return "UNSPECIFIED";
 		}
 		return lootRule.trim().toUpperCase();
 	}
 
-	/**
-	 * Whether a stored host credential matches the one supplied on a request. An ad
-	 * with no stored credential ({@code stored} null/blank) is open to anyone — older
-	 * clients that pre-date the feature. Otherwise the supplied key must match exactly
-	 * (compared in constant time so a mismatch can't be timed out character by character).
-	 */
-	static boolean hostKeyAuthorized(String stored, String supplied)
-	{
-		if (stored == null || stored.isBlank())
-		{
+	static boolean hostKeyAuthorized(String stored, String supplied) {
+		if (stored == null || stored.isBlank()) {
 			return true;
 		}
-		if (supplied == null)
-		{
+		if (supplied == null) {
 			return false;
 		}
+		// Constant-time compare so a mismatch can't be timed out character by character.
 		return MessageDigest.isEqual(stored.getBytes(StandardCharsets.UTF_8), supplied.getBytes(StandardCharsets.UTF_8));
 	}
 
-	/** Case/whitespace-insensitive host comparison (RSNs may carry nbsp). */
-	static boolean sameHost(String a, String b)
-	{
+	static boolean sameHost(String a, String b) {
 		return a != null && b != null && normalizeHost(a).equals(normalizeHost(b));
 	}
 
-	static String normalizeHost(String host)
-	{
-		return host.replace('\u00A0', ' ').trim().toLowerCase();
+	static String normalizeHost(String host) {
+		return host.replace(' ', ' ').trim().toLowerCase();
 	}
 }
