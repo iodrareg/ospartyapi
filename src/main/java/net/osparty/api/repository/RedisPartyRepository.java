@@ -28,6 +28,9 @@ public class RedisPartyRepository implements PartyRepository {
 	private static final String CODE_KEY = "partycode:";
 	private static final String CREDENTIAL_KEY = "partykey:";
 	private static final String SEQ_KEY = "party:seq";
+	// Set of live party ids. list() reads this instead of scanning the keyspace with KEYS; ids whose
+	// value has TTL'd out are pruned lazily on the next list().
+	private static final String INDEX_KEY = "party:ids";
 
 	private final StringRedisTemplate redis;
 	private final ObjectMapper mapper;
@@ -43,19 +46,35 @@ public class RedisPartyRepository implements PartyRepository {
 
 	@Override
 	public List<Party> list(String activity) {
-		Set<String> keys = redis.keys(PARTY_KEY + "*");
+		Set<String> ids = redis.opsForSet().members(INDEX_KEY);
+		if (ids == null || ids.isEmpty()) {
+			return new ArrayList<>();
+		}
+		// One SMEMBERS + one pipelined MGET instead of a KEYS keyspace scan: cost scales with the
+		// number of live ads, not the whole Redis keyspace, and never blocks on a full scan.
+		List<String> idList = new ArrayList<>(ids);
+		List<String> keys = new ArrayList<>(idList.size());
+		for (String id : idList) {
+			keys.add(PARTY_KEY + id);
+		}
+		List<String> values = redis.opsForValue().multiGet(keys);
+
 		List<Party> out = new ArrayList<>();
-		if (keys != null) {
-			for (String key : keys) {
-				if (key.equals(SEQ_KEY)) {
-					continue;
-				}
-				Party party = read(key);
-				if (party != null && !party.isPrivateParty() && (activity == null || activity.isBlank()
-					|| activity.equals(party.getActivity()))) {
-					out.add(party);
-				}
+		List<Object> expired = new ArrayList<>();
+		for (int i = 0; i < idList.size(); i++) {
+			String json = values == null ? null : values.get(i);
+			if (json == null) {
+				expired.add(idList.get(i)); // value TTL'd out — drop the stale id from the index
+				continue;
 			}
+			Party party = parse(json, keys.get(i));
+			if (party != null && !party.isPrivateParty() && (activity == null || activity.isBlank()
+				|| activity.equals(party.getActivity()))) {
+				out.add(party);
+			}
+		}
+		if (!expired.isEmpty()) {
+			redis.opsForSet().remove(INDEX_KEY, expired.toArray());
 		}
 		out.sort(Comparator.comparingLong(Party::getCreatedAt).reversed());
 		return out;
@@ -93,6 +112,7 @@ public class RedisPartyRepository implements PartyRepository {
 			}
 			redis.delete(PARTY_KEY + previousId);
 			redis.delete(CREDENTIAL_KEY + previousId);
+			redis.opsForSet().remove(INDEX_KEY, previousId);
 		}
 
 		String id = String.valueOf(redis.opsForValue().increment(SEQ_KEY));
@@ -100,6 +120,7 @@ public class RedisPartyRepository implements PartyRepository {
 		Party party = PartyFactory.fromRequest(request, id, inviteCode, now);
 
 		redis.opsForValue().set(PARTY_KEY + id, write(party), ttl);
+		redis.opsForSet().add(INDEX_KEY, id);
 		redis.opsForValue().set(hostIndexKey, id, ttl);
 		redis.opsForValue().set(CODE_KEY + inviteCode, id, ttl);
 		if (hostKey != null && !hostKey.isBlank()) {
@@ -148,6 +169,7 @@ public class RedisPartyRepository implements PartyRepository {
 			return Optional.empty();
 		}
 		redis.delete(key);
+		redis.opsForSet().remove(INDEX_KEY, id);
 		redis.delete(HOST_KEY + PartyFactory.normalizeHost(party.getHost()));
 		redis.delete(CREDENTIAL_KEY + id);
 		if (party.getInviteCode() != null) {
@@ -166,7 +188,10 @@ public class RedisPartyRepository implements PartyRepository {
 	}
 
 	private Party read(String key) {
-		String json = redis.opsForValue().get(key);
+		return parse(redis.opsForValue().get(key), key);
+	}
+
+	private Party parse(String json, String keyForLog) {
 		if (json == null) {
 			return null;
 		}
@@ -174,7 +199,7 @@ public class RedisPartyRepository implements PartyRepository {
 			return mapper.readValue(json, Party.class);
 		}
 		catch (Exception e) {
-			log.warn("Failed to read party at {}", key, e);
+			log.warn("Failed to read party at {}", keyForLog, e);
 			return null;
 		}
 	}

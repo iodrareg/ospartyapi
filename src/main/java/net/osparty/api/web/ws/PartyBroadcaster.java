@@ -279,16 +279,16 @@ public class PartyBroadcaster extends TextWebSocketHandler {
 			if (!sub.subscribed || !sub.session.isOpen()) {
 				continue;
 			}
-			String cacheKey = sub.activity == null ? " all" : sub.activity;
-			TextMessage frame = perActivity.get(cacheKey);
-			if (frame == null) {
-				frame = buildBatch(v, sub.activity, created, updated, removed);
-				if (frame == null) {
-					continue; // nothing matches this activity filter
-				}
-				perActivity.put(cacheKey, frame);
+			// One serialised frame per distinct activity scope. HashMap permits the null ("all
+			// activities") key, so no sentinel string is needed; a cached null means "nothing
+			// matches this scope" and is neither rebuilt nor sent.
+			if (!perActivity.containsKey(sub.activity)) {
+				perActivity.put(sub.activity, buildBatch(v, sub.activity, created, updated, removed));
 			}
-			sendRaw(sub, frame);
+			TextMessage frame = perActivity.get(sub.activity);
+			if (frame != null) {
+				sendRaw(sub, frame);
+			}
 		}
 	}
 
