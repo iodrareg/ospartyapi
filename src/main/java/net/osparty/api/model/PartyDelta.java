@@ -26,7 +26,11 @@ public record PartyDelta(
 	Integer minKillCount,
 	Integer minHardModeKillCount,
 	Integer invocation,
-	Boolean hardMode) {
+	Boolean hardMode,
+	List<String> requiredRoles,
+	String hostRole,
+	Boolean learner,
+	Boolean teacher) {
 
 	/**
 	 * Builds a delta of the fields that differ between {@code prev} and {@code cur}, or returns null
@@ -50,13 +54,20 @@ public record PartyDelta(
 			prev.getMinHardModeKillCount() != cur.getMinHardModeKillCount() ? cur.getMinHardModeKillCount() : null;
 		Integer invocation = prev.getInvocation() != cur.getInvocation() ? cur.getInvocation() : null;
 		Boolean hardMode = prev.isHardMode() != cur.isHardMode() ? cur.isHardMode() : null;
+		List<String> requiredRoles =
+			Objects.equals(prev.getRequiredRoles(), cur.getRequiredRoles()) ? null : cur.getRequiredRoles();
+		String hostRole = Objects.equals(prev.getHostRole(), cur.getHostRole()) ? null : cur.getHostRole();
+		Boolean learner = prev.isLearner() != cur.isLearner() ? cur.isLearner() : null;
+		Boolean teacher = prev.isTeacher() != cur.isTeacher() ? cur.isTeacher() : null;
 
 		if (size == null && world == null && layout == null && neededRoles == null && description == null
 			&& capacity == null && lootRule == null && ironmanOnly == null && privateParty == null
-			&& minKillCount == null && minHardModeKillCount == null && invocation == null && hardMode == null) {
+			&& minKillCount == null && minHardModeKillCount == null && invocation == null && hardMode == null
+			&& requiredRoles == null && hostRole == null && learner == null && teacher == null) {
 			return null;
 		}
 		return new PartyDelta(cur.getId(), cur.getActivity(), size, world, layout, neededRoles, description,
-			capacity, lootRule, ironmanOnly, privateParty, minKillCount, minHardModeKillCount, invocation, hardMode);
+			capacity, lootRule, ironmanOnly, privateParty, minKillCount, minHardModeKillCount, invocation, hardMode,
+			requiredRoles, hostRole, learner, teacher);
 	}
 }

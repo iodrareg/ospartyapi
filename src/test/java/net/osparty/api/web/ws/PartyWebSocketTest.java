@@ -126,21 +126,23 @@ class PartyWebSocketTest {
 			JsonNode hosted = awaitWhere(messages, m -> "hosted".equals(type(m)), "hosted ack");
 			String id = hosted.path("party").path("id").asText();
 
-			awaitWhere(messages, m -> "created".equals(type(m)) && id.equals(m.path("party").path("id").asText()),
+			awaitWhere(messages,
+				m -> "batch".equals(type(m)) && anyMatch(m.path("created"), p -> id.equals(p.path("id").asText())),
 				"created for the hosted ad");
 
 			session.sendMessage(new TextMessage("{\"type\":\"update\",\"id\":\"" + id + "\",\"patch\":"
-				+ "{\"requiredRoles\":[\"mage\",\"fill\",\"fill\"],\"hostRole\":\"mage\",\"learner\":true}}"));
+				+ "{\"requiredRoles\":[\"mage\",\"range\",\"fill\"],\"hostRole\":\"mage\",\"learner\":true}}"));
 
-			JsonNode updated = awaitWhere(messages,
-				m -> "updated".equals(type(m)) && id.equals(m.path("party").path("id").asText())
-					&& m.path("party").path("learner").asBoolean(),
-				"updated with new roles + learner");
-			assertThat(updated.path("party").path("hostRole").asText()).isEqualTo("mage");
-			assertThat(updated.path("party").path("requiredRoles").get(0).asText()).isEqualTo("mage");
-			assertThat(updated.path("party").path("learner").asBoolean()).isTrue();
+			JsonNode batch = awaitWhere(messages,
+				m -> "batch".equals(type(m)) && anyMatch(m.path("updated"),
+					d -> id.equals(d.path("id").asText()) && d.path("learner").asBoolean()),
+				"updated delta with new roles + learner");
+			JsonNode delta = firstMatch(batch.path("updated"), d -> id.equals(d.path("id").asText()));
+			assertThat(delta.path("hostRole").asText()).isEqualTo("mage");
+			assertThat(delta.path("requiredRoles").get(0).asText()).isEqualTo("mage");
+			assertThat(delta.path("learner").asBoolean()).isTrue();
 			// neededRoles re-seeds from the new composition minus the host's role.
-			assertThat(updated.path("party").path("neededRoles").toString()).isEqualTo("[\"fill\",\"fill\"]");
+			assertThat(delta.path("neededRoles").toString()).isEqualTo("[\"range\",\"fill\"]");
 		}
 		finally {
 			session.close();
