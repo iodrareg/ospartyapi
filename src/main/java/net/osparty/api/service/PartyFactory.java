@@ -1,5 +1,6 @@
 package net.osparty.api.service;
 
+import net.osparty.api.model.Member;
 import net.osparty.api.model.Party;
 import net.osparty.api.model.PartyRequest;
 import net.osparty.api.model.PartyUpdate;
@@ -42,9 +43,9 @@ public final class PartyFactory {
 		party.setLearner(request.learner());
 		party.setTeacher(request.teacher());
 		party.setSize(1);
-		List<String> members = new ArrayList<>();
+		List<Member> members = new ArrayList<>();
 		if (request.host() != null) {
-			members.add(request.host());
+			members.add(new Member(request.host(), request.hostAccountHash()));
 		}
 		party.setMembers(members);
 		return party;
